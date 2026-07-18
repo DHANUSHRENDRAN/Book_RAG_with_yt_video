@@ -1,0 +1,277 @@
+# BookRAG — Project Specification Document
+
+**Project Name:** BookRAG  
+**Type:** Personal AI-Powered Knowledge Base  
+**Stack:** Python · FastAPI · ChromaDB → Qdrant · Groq LLaMA + Whisper · Sentence Transformers  
+**Status:** Local MVP Complete → Cloud Deployment Next  
+
+---
+
+## What Is This Project?
+
+BookRAG is a **personal AI library assistant** that lets you upload PDF books and YouTube videos, store them in a local or cloud vector database, and ask natural language questions — getting answers grounded in your exact content with page-level and timestamp-level citations.
+
+It is **not a chatbot** that answers from general AI knowledge. Every answer comes directly from the user's own uploaded material. Think of it as giving your book collection a brain.
+
+---
+
+## The Problem It Solves
+
+| Problem | How BookRAG Solves It |
+|---|---|
+| You have 10+ books but can't remember which one had that concept | Ask a question — it finds the exact page across all books |
+| Watching long YouTube lectures — hard to search later | Video is transcribed, chunked, and becomes searchable |
+| Highlight/notes apps don't understand meaning | Semantic search finds related ideas even with different wording |
+| AI chatbots hallucinate answers | Every answer is grounded in your actual uploaded content |
+| Books are siloed — can't cross-reference easily | All books in one collection, ask across all simultaneously |
+
+---
+
+## Who Is This Useful For?
+
+- **Students** — Upload textbooks, lecture PDFs, research papers. Ask exam questions and get cited answers.
+- **Researchers** — Cross-reference multiple papers and books on a topic instantly.
+- **Self-help / Non-fiction readers** — Upload 10 psychology books, ask "what do all these books say about habits?"
+- **Content creators / YouTubers** — Ingest your own video transcripts to repurpose content.
+- **Professionals** — Upload company docs, SOPs, training manuals. Query them conversationally.
+- **Anyone building a second brain** — Local, private, fully owned knowledge base.
+
+---
+
+## Features
+
+### Core Features
+
+**1. Multi-Format Ingestion**
+- Upload PDF books of any size
+- Ingest YouTube videos by URL (any video — no captions needed)
+- Both can coexist in the same collection
+
+**2. Hybrid Retrieval (BM25 + Semantic)**
+- Semantic search: finds chunks by *meaning*, not just keywords
+- BM25 (keyword): finds exact term matches
+- Combined with 70% semantic / 30% keyword weighting
+- Gets the best of both — neither alone is as accurate
+
+**3. Dynamic Adaptive Chunking**
+- Chunk size automatically scales with document size
+  - Small docs (≤20 pages) → 500 token chunks, 60 overlap
+  - Medium docs (≤60 pages) → 800 tokens, 100 overlap
+  - Large docs (≤150 pages) → 1100 tokens, 140 overlap
+  - Very large (150+ pages) → 1400 tokens, 180 overlap
+- YouTube videos → 1200 token chunks with 150 overlap (preserves conversation flow)
+- RecursiveCharacterTextSplitter respects paragraph and sentence boundaries
+
+**4. Whisper AI Transcription for YouTube**
+- Downloads audio using yt_dlp (works on any public video)
+- Transcribes locally using faster-whisper (base model, CPU-friendly)
+- Groups transcript into 2-minute "pages" with [MM:SS] timestamps
+- Every answer from video content cites exact timestamps
+
+**5. Page-Level Citations**
+- Every answer shows which book and which page the information came from
+- YouTube answers cite timestamps
+- Relevance scores shown per source (0–100%)
+- Click any source card to see the exact text chunk that was used
+
+**6. Collection Management**
+- Organize books into named collections (e.g. "psychology", "finance", "lectures")
+- Create, switch, and delete collections independently
+- Remove individual books without affecting the rest
+- Re-uploading the same book safely replaces old data (no duplicates)
+
+**7. Structured Answer Format**
+LLaMA answers follow a fixed format:
+- Title
+- Overview (2–3 sentence summary)
+- Key Points (bullet points with bold terms)
+- Details (expanded prose with inline citations)
+- Sources Used (list of books and pages)
+
+**8. Book & Content-Type Filtering**
+- Filter queries to a single specific book
+- Filter by content type: PDFs only, YouTube only, or all
+- Useful when you know which source has the answer
+
+---
+
+## Technical Architecture
+
+```
+User uploads PDF / YouTube URL
+          ↓
+   Text Extraction
+   PDF → pdfplumber     YouTube → yt_dlp (audio) → Whisper (transcript)
+          ↓
+   Text Cleaning
+   Remove headers, footers, page numbers, excessive whitespace
+          ↓
+   Dynamic Chunking
+   RecursiveCharacterTextSplitter (size scales with doc size)
+          ↓
+   Embedding
+   all-MiniLM-L6-v2 (SentenceTransformers / HuggingFace)
+   384-dimensional vectors
+          ↓
+   Vector Storage
+   ChromaDB (local) → Qdrant Cloud (deployment)
+   cosine similarity index (HNSW)
+
+─────────────────────────────────────
+
+User asks a question
+          ↓
+   Question Embedding
+   Same model → 384-dim vector
+          ↓
+   Hybrid Retrieval
+   ChromaDB/Qdrant → top N*3 semantic results
+   BM25 scoring on same candidates
+   Combined score: 0.7×semantic + 0.3×BM25
+   Re-ranked → top N chunks
+          ↓
+   Context Assembly
+   Chunks formatted with source hints [📄 PDF] / [📺 VIDEO]
+   Page numbers and timestamps included
+          ↓
+   Groq LLaMA (llama-3.3-70b-versatile)
+   System prompt enforces structured answer format
+   Only uses provided context (no hallucination)
+          ↓
+   Structured Answer with citations → User
+```
+
+---
+
+## Retrieval Pipeline Detail
+
+**Why Hybrid (BM25 + Semantic)?**
+
+| Retrieval Type | Strength | Weakness |
+|---|---|---|
+| Semantic only | Finds meaning, synonyms, related concepts | Misses exact terms (names, codes, titles) |
+| BM25 only | Exact keyword matching | Doesn't understand meaning |
+| Hybrid (this project) | Best of both worlds | Slightly more compute |
+
+Example: Searching "Kahneman System 2 slow thinking"
+- Semantic finds pages about deliberate, effortful cognition even if those words aren't used
+- BM25 ensures pages that literally say "System 2" rank high
+- Combined → best results
+
+---
+
+## Current Local Stack
+
+| Component | Technology | Why |
+|---|---|---|
+| API Server | FastAPI + Uvicorn | Fast, async, modern Python |
+| PDF Extraction | pdfplumber | Better than PyPDF2 for layout-heavy books |
+| Text Splitting | LangChain RecursiveCharacterTextSplitter | Respects sentence/paragraph boundaries |
+| Embedding Model | all-MiniLM-L6-v2 (SentenceTransformers) | 80MB, fast on CPU, good quality |
+| Vector Database | ChromaDB (local persistent) | Zero setup, file-based |
+| YouTube Download | yt_dlp | Works on any public YouTube video |
+| Transcription | faster-whisper (base model) | No API needed, runs on CPU |
+| LLM | Groq → llama-3.3-70b-versatile | Free tier, fast inference |
+| Frontend | HTML + CSS + Vanilla JS | Zero dependencies, single file |
+
+---
+
+## Planned Cloud Deployment Stack (Fully Free)
+
+| Component | Technology | Free Tier |
+|---|---|---|
+| Vector Database | Qdrant Cloud (Mumbai/ap-south-1) | 1GB RAM, 4GB disk — forever |
+| Embedding | fastembed (replaces sentence-transformers) | No torch — runs in 200MB RAM |
+| Whisper | **Groq Whisper API** (whisper-large-v3) | Free tier — fast cloud transcription |
+| LLM | Groq → llama-3.3-70b-versatile | 6000 req/day, 500k tokens/day |
+| Backend Hosting | Render.com free tier | 750 hours/month |
+| Frontend | Served by FastAPI (same server) | Included |
+| **Total Cost** | | **$0/month** |
+
+### Groq Whisper API — Free Tier Details
+- Model: whisper-large-v3 (better than local base model)
+- Free tier: generous audio minutes per day
+- Replaces local faster-whisper entirely
+- No ffmpeg needed on server
+- Much faster than local CPU transcription
+
+### Why Qdrant over ChromaDB for deployment
+- ChromaDB is file-based — no persistent disk on free hosting
+- Qdrant Cloud gives a real database endpoint with API key
+- Mumbai region = low latency for South India users
+- Free forever (just ping weekly to avoid inactivity suspension)
+
+---
+
+## Improvements Roadmap
+
+### Immediate (before deployment)
+- [ ] Swap ChromaDB → Qdrant Cloud client
+- [ ] Swap faster-whisper → Groq Whisper API (faster + no local model)
+- [ ] Swap sentence-transformers → fastembed (kills torch dependency, saves 1GB RAM)
+- [ ] Add `.env` file support for API keys (not hardcoded)
+- [ ] Add progress streaming for YouTube ingestion (currently silent)
+
+### Short Term
+- [ ] Chunk deduplication — prevent same page appearing twice in results
+- [ ] Re-ranking with a cross-encoder model for better precision
+- [ ] Multi-question support — ask 3 questions at once, get combined answer
+- [ ] Export answers as PDF/markdown
+- [ ] Collection sharing — export/import collection data
+
+### Medium Term
+- [ ] Image extraction from PDFs (diagrams, charts)
+- [ ] Multi-language support (Whisper already supports it, need to pass `language=None`)
+- [ ] Voice input for questions (Web Speech API in frontend)
+- [ ] Highlight + annotate — mark important answer chunks
+- [ ] Chat history — maintain conversation context across questions
+
+### Advanced
+- [ ] Agentic RAG — let the model decide to search multiple times if first retrieval insufficient
+- [ ] Graph RAG — build concept relationships between books
+- [ ] Local LLM fallback — Ollama integration when Groq quota is exhausted
+
+---
+
+## What Makes This Different From Existing Tools
+
+| Tool | Problem | BookRAG Advantage |
+|---|---|---|
+| ChatGPT/Claude | Uploads lost after session, 32k token limit | Permanent storage, any size |
+| Notion AI | Only works on Notion content | Works with any PDF + YouTube |
+| Google NotebookLM | Cloud-only, privacy concerns | Fully local option available |
+| LlamaIndex default | Code-heavy, no UI | Ready-to-use UI included |
+| Perplexity | Web search, not your documents | Your private library only |
+
+---
+
+## Project Folder Structure
+
+```
+book_rag/
+├── app.py              ← FastAPI routes (thin layer)
+├── rag.py              ← All RAG logic (extraction, chunking, retrieval, ask)
+├── index.html          ← Full frontend (single file)
+├── requirements.txt    ← All dependencies
+├── setup.sh            ← One-command venv setup (Linux/Mac)
+├── start.sh            ← Start server
+├── .env                ← API keys (never commit this)
+├── chroma_db/          ← Local vector database (auto-created)
+├── uploads_temp/       ← Temporary PDF storage during processing
+└── whisper_cache/      ← Temporary audio during YouTube processing
+```
+
+---
+
+## Current Limitations
+
+- **Local only** — no multi-user support yet
+- **CPU bound** — embedding and Whisper transcription slow without GPU
+- **No streaming** — answers appear all at once, not word by word
+- **No OCR** — scanned PDFs (image-based) won't extract text
+- **English primary** — Whisper supports others but prompts are English-only
+- **Qdrant free inactivity** — cluster suspended after 1 week without use (ping to keep alive)
+
+---
+
+*Built with Python 3.11 · Designed for personal and small-team use · Fully open source stack*

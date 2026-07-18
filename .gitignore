@@ -4,3 +4,5 @@ __pycache__/
 uploads_temp/
 whisper_cache/
 chroma_db/
+
+roughtry.py
