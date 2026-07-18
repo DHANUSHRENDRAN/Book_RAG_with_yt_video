@@ -1,0 +1,2229 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>BookRAG — Your AI Reading Companion</title>
+  <meta name="description"
+    content="Ask questions about your books using AI. Upload PDFs, create collections, and get instant answers with source references." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+    rel="stylesheet" />
+  <style>
+    /* ═══════════════════════════════════════════════════════
+       RESET & TOKENS
+    ═══════════════════════════════════════════════════════ */
+    *,
+    *::before,
+    *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    :root {
+      /* ── MAIN AREA (warm peach-white) ───────────────── */
+      --bg: #FBF7F4;
+      --bg2: #F5EFE9;
+      --card: #FFFFFF;
+      --card2: #FDF2EC;
+
+      /* ── SIDEBAR (warm cream — matches main) ─────────── */
+      --surface: #F3EAE2;
+      --sb-card: #EAE0D8;
+      --sb-card2: #E0D4CA;
+
+      /* ── ACCENT (warm terracotta) ────────────────────── */
+      --accent: #C96B3F;
+      --accent2: #A8532C;
+      --accent-dim: rgba(201, 107, 63, 0.12);
+      --accent-glow: rgba(201, 107, 63, 0.22);
+
+      /* ── STATUS COLORS ───────────────────────────────── */
+      --emerald: #16a34a;
+      --rose: #e11d48;
+      --amber: #d97706;
+
+      /* ── TEXT (dark on light main) ───────────────────── */
+      --text: #1A1520;
+      --text2: #4A4258;
+      --text3: #8C7E98;
+      --text4: #C4B8D2;
+
+      /* ── TEXT on sidebar (dark on warm cream) ───────── */
+      --sb-text: #1A1520;
+      --sb-text2: #4A4258;
+      --sb-text3: #8C7E98;
+      --sb-text4: #C4B8D2;
+
+      /* ── BORDERS ─────────────────────────────────────── */
+      --border: rgba(0, 0, 0, 0.08);
+      --border2: rgba(0, 0, 0, 0.14);
+      --border3: rgba(0, 0, 0, 0.05);
+      --sb-border: rgba(0, 0, 0, 0.09);
+
+      /* ── RADIUS ──────────────────────────────────────── */
+      --r: 10px;
+      --r2: 16px;
+      --r3: 24px;
+
+      /* ── SIDEBAR WIDTH ───────────────────────────────── */
+      --sb: 272px;
+
+      /* ── FONTS ───────────────────────────────────────── */
+      --sans: 'Inter', -apple-system, sans-serif;
+      --mono: 'JetBrains Mono', monospace;
+    }
+
+    html,
+    body {
+      height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--sans);
+      font-size: 14px;
+      line-height: 1.6;
+      overflow: hidden;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ── Scrollbar ─────────────────────────────────────────── */
+    ::-webkit-scrollbar {
+      width: 3px;
+    }
+
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background: var(--text4);
+      border-radius: 2px;
+    }
+
+    /* Sidebar scrollbar (dark on light) */
+    .sidebar ::-webkit-scrollbar-thumb {
+      background: var(--sb-text4);
+    }
+
+    .books-panel ::-webkit-scrollbar-thumb {
+      background: var(--sb-text4);
+    }
+
+    /* ═══════════════════════════════════════════════════════
+       LAYOUT
+    ═══════════════════════════════════════════════════════ */
+    .app {
+      display: grid;
+      grid-template-columns: var(--sb) 1fr;
+      height: 100vh;
+    }
+
+    /* ═══════════════════════════════════════════════════════
+       SIDEBAR
+    ═══════════════════════════════════════════════════════ */
+    .sidebar {
+      background: var(--surface);
+      border-right: 1px solid var(--sb-border);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      position: relative;
+    }
+
+    /* soft warm orb in sidebar corner */
+    .sidebar::before {
+      content: '';
+      position: absolute;
+      top: -40px;
+      left: -40px;
+      width: 200px;
+      height: 200px;
+      background: radial-gradient(circle, rgba(201, 107, 63, 0.08) 0%, transparent 70%);
+      pointer-events: none;
+    }
+
+    /* ── Logo ──────────────────────────────────────────────── */
+    .sidebar-top {
+      padding: 20px 16px 16px;
+      border-bottom: 1px solid var(--border3);
+    }
+
+    .logo-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 18px;
+    }
+
+    .logo-mark {
+      width: 34px;
+      height: 34px;
+      border-radius: 10px;
+      background: linear-gradient(135deg, var(--accent) 0%, #E8935A 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      box-shadow: 0 0 20px rgba(201, 107, 63, 0.4);
+    }
+
+    .logo-mark svg {
+      width: 18px;
+      height: 18px;
+    }
+
+    .logo-name {
+      font-size: 15px;
+      font-weight: 700;
+      letter-spacing: -0.3px;
+      color: var(--sb-text);
+    }
+
+    .logo-name em {
+      font-style: normal;
+      background: linear-gradient(90deg, var(--accent), #E8935A);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .logo-badge {
+      font-size: 9px;
+      font-family: var(--mono);
+      font-weight: 500;
+      color: var(--accent);
+      background: var(--accent-dim);
+      border: 1px solid var(--accent-glow);
+      padding: 2px 6px;
+      border-radius: 4px;
+      letter-spacing: 0.05em;
+      margin-left: auto;
+    }
+
+    /* ── API Key ───────────────────────────────────────────── */
+    .field-label {
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--sb-text3);
+      margin-bottom: 6px;
+    }
+
+    .api-key-field {
+      position: relative;
+    }
+
+    .api-key-field input {
+      width: 100%;
+      background: var(--sb-card);
+      border: 1px solid var(--sb-border);
+      border-radius: var(--r);
+      color: var(--sb-text);
+      font-family: var(--mono);
+      font-size: 11px;
+      padding: 9px 12px 9px 36px;
+      outline: none;
+      transition: border-color 0.2s, box-shadow 0.2s;
+      letter-spacing: 0.03em;
+    }
+
+    .api-key-field input:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(201, 107, 63, 0.15);
+    }
+
+    .api-key-field input::placeholder {
+      color: var(--sb-text3);
+    }
+
+    .api-key-field .key-icon {
+      position: absolute;
+      left: 11px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--sb-text3);
+      font-size: 13px;
+      pointer-events: none;
+    }
+
+    /* ── Section wrapper ───────────────────────────────────── */
+    .sb-section {
+      padding: 14px 16px 0;
+    }
+
+    .sb-section-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 8px;
+    }
+
+    .icon-btn {
+      width: 24px;
+      height: 24px;
+      background: none;
+      border: 1px solid var(--sb-border);
+      border-radius: 6px;
+      color: var(--sb-text3);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      transition: all 0.18s;
+    }
+
+    .icon-btn:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+      background: var(--accent-dim);
+    }
+
+    /* ── Collections list ─────────────────────────────────── */
+    .col-list {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .col-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 10px;
+      border-radius: 8px;
+      cursor: pointer;
+      border: 1px solid transparent;
+      transition: all 0.18s;
+      position: relative;
+    }
+
+    .col-item:hover {
+      background: var(--sb-card);
+      border-color: var(--sb-border);
+    }
+
+    .col-item.active {
+      background: var(--accent-dim);
+      border-color: var(--accent-glow);
+    }
+
+    .col-pip {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--sb-text4);
+      flex-shrink: 0;
+      transition: background 0.2s;
+    }
+
+    .col-item.active .col-pip {
+      background: var(--accent);
+      box-shadow: 0 0 8px rgba(201, 107, 63, 0.5);
+    }
+
+    .col-name {
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--sb-text2);
+      flex: 1;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .col-item.active .col-name {
+      color: var(--sb-text);
+    }
+
+    .col-chip {
+      font-family: var(--mono);
+      font-size: 9px;
+      color: var(--sb-text3);
+      background: var(--sb-card2);
+      padding: 1px 5px;
+      border-radius: 4px;
+    }
+
+    .col-item.active .col-chip {
+      color: var(--accent);
+      background: var(--accent-dim);
+    }
+
+    .col-del-btn {
+      background: none;
+      border: none;
+      color: var(--sb-text4);
+      cursor: pointer;
+      font-size: 11px;
+      padding: 2px;
+      opacity: 0;
+      transition: opacity 0.15s, color 0.15s;
+      line-height: 1;
+    }
+
+    .col-item:hover .col-del-btn {
+      opacity: 1;
+    }
+
+    .col-del-btn:hover {
+      color: #f87171;
+    }
+
+    /* ── Books panel ─────────────────────────────────────── */
+    .books-panel {
+      flex: 1;
+      overflow-y: auto;
+      padding: 14px 16px;
+    }
+
+    .book-row {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      padding: 8px 0;
+      border-bottom: 1px solid var(--border3);
+    }
+
+    .book-row:last-child {
+      border-bottom: none;
+    }
+
+    .book-icon-wrap {
+      width: 30px;
+      height: 30px;
+      border-radius: 8px;
+      background: linear-gradient(135deg, var(--sb-card2), var(--sb-card));
+      border: 1px solid var(--sb-border);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      font-size: 13px;
+    }
+
+    .book-info {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .book-title {
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--sb-text);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      display: block;
+    }
+
+    .book-meta {
+      font-family: var(--mono);
+      font-size: 9px;
+      color: var(--sb-text3);
+      margin-top: 1px;
+    }
+
+    .book-del-btn {
+      background: none;
+      border: none;
+      color: var(--sb-text4);
+      cursor: pointer;
+      font-size: 11px;
+      opacity: 0;
+      padding: 4px;
+      transition: opacity 0.15s, color 0.15s;
+      flex-shrink: 0;
+    }
+
+    .book-row:hover .book-del-btn {
+      opacity: 1;
+    }
+
+    .book-del-btn:hover {
+      color: #f87171;
+    }
+
+    /* ── Sidebar footer ─────────────────────────────────── */
+    .sidebar-footer {
+      padding: 12px 16px;
+      border-top: 1px solid var(--sb-border);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .footer-dot {
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+      background: #4ade80;
+      box-shadow: 0 0 6px #4ade80;
+      animation: breathe 2.4s ease-in-out infinite;
+      flex-shrink: 0;
+    }
+
+    @keyframes breathe {
+
+      0%,
+      100% {
+        opacity: 1;
+      }
+
+      50% {
+        opacity: 0.4;
+      }
+    }
+
+    .footer-text {
+      font-family: var(--mono);
+      font-size: 9px;
+      color: var(--sb-text3);
+      letter-spacing: 0.04em;
+    }
+
+    /* ── Empty states ──────────────────────────────────── */
+    .empty {
+      padding: 20px 8px;
+      text-align: center;
+    }
+
+    .empty p {
+      font-size: 11px;
+      color: var(--sb-text3);
+      font-style: italic;
+      line-height: 1.5;
+    }
+
+    /* ═══════════════════════════════════════════════════════
+       MAIN AREA
+    ═══════════════════════════════════════════════════════ */
+    .main {
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      background: var(--bg);
+      position: relative;
+    }
+
+    /* warm peach gradient mesh */
+    .main::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background:
+        radial-gradient(ellipse 60% 40% at 80% 5%, rgba(201, 107, 63, 0.06) 0%, transparent 60%),
+        radial-gradient(ellipse 50% 35% at 10% 90%, rgba(232, 147, 90, 0.05) 0%, transparent 60%);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* ── Top bar ─────────────────────────────────────────── */
+    .topbar {
+      padding: 14px 28px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      background: rgba(251, 247, 244, 0.88);
+      backdrop-filter: blur(16px);
+      border-bottom: 1px solid var(--border3);
+      flex-shrink: 0;
+      position: relative;
+      z-index: 10;
+    }
+
+    .topbar-status {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+    }
+
+    .status-ring {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--text4);
+      transition: background 0.3s, box-shadow 0.3s;
+    }
+
+    .status-ring.live {
+      background: #16a34a;
+      box-shadow: 0 0 8px rgba(22, 163, 74, 0.4);
+    }
+
+    .status-label {
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--text2);
+    }
+
+    .status-label strong {
+      color: var(--accent);
+      font-weight: 600;
+    }
+
+    .topbar-actions {
+      margin-left: auto;
+      display: flex;
+      gap: 8px;
+    }
+
+    .tb-btn {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      padding: 6px 12px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: none;
+      color: var(--text2);
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      font-family: var(--sans);
+      transition: all 0.18s;
+    }
+
+    .tb-btn:hover {
+      border-color: var(--border2);
+      background: var(--accent-dim);
+      color: var(--accent);
+    }
+
+    /* ── Drop zone ───────────────────────────────────────── */
+    .upload-zone {
+      margin: 16px 28px 0;
+      border: 1.5px dashed var(--border2);
+      border-radius: var(--r2);
+      padding: 14px 20px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      cursor: pointer;
+      transition: all 0.22s;
+      background: linear-gradient(135deg, rgba(201, 107, 63, 0.04), rgba(232, 147, 90, 0.02));
+      flex-shrink: 0;
+      position: relative;
+      z-index: 10;
+    }
+
+    .upload-zone:hover,
+    .upload-zone.over {
+      border-color: var(--accent);
+      background: var(--accent-dim);
+    }
+
+    .upload-icon {
+      width: 38px;
+      height: 38px;
+      border-radius: 10px;
+      background: var(--accent-dim);
+      border: 1px solid rgba(201, 107, 63, 0.25);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 17px;
+      flex-shrink: 0;
+      transition: transform 0.2s;
+    }
+
+    .upload-zone:hover .upload-icon {
+      transform: scale(1.05);
+    }
+
+    .upload-copy {
+      flex: 1;
+    }
+
+    .upload-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 2px;
+    }
+
+    .upload-sub {
+      font-size: 11px;
+      color: var(--text3);
+    }
+
+    #upload-sub-id {
+      color: var(--accent);
+      font-weight: 500;
+    }
+
+    .upload-btn {
+      padding: 8px 16px;
+      border-radius: 8px;
+      background: linear-gradient(135deg, var(--accent), #E8935A);
+      border: none;
+      color: #fff;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      font-family: var(--sans);
+      white-space: nowrap;
+      transition: opacity 0.18s, transform 0.18s;
+      box-shadow: 0 4px 14px rgba(201, 107, 63, 0.3);
+    }
+
+    .upload-btn:hover {
+      opacity: 0.88;
+      transform: translateY(-1px);
+    }
+
+    #file-input {
+      display: none;
+    }
+
+    /* ── YouTube Zone ────────────────────────────────────── */
+    .yt-zone {
+      margin: 10px 28px 0;
+      display: flex;
+      gap: 10px;
+      flex-shrink: 0;
+      position: relative;
+      z-index: 10;
+    }
+
+    .yt-zone input {
+      flex: 1;
+      padding: 12px 16px;
+      border: 1.5px solid var(--border2);
+      border-radius: var(--r2);
+      font-family: var(--sans);
+      font-size: 13px;
+      color: var(--text);
+      background: rgba(255, 255, 255, 0.7);
+      outline: none;
+      transition: all 0.2s;
+    }
+
+    .yt-zone input:focus {
+      border-color: var(--accent);
+      background: var(--card);
+      box-shadow: 0 0 0 3px rgba(201, 107, 63, 0.1);
+    }
+
+    .yt-zone button {
+      padding: 0 20px;
+      border-radius: var(--r2);
+      background: linear-gradient(135deg, var(--text), var(--text2));
+      border: none;
+      color: #fff;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      font-family: var(--sans);
+      white-space: nowrap;
+      transition: opacity 0.18s, transform 0.18s;
+      box-shadow: 0 4px 14px rgba(0, 0, 0, 0.15);
+    }
+
+    .yt-zone button:hover {
+      opacity: 0.9;
+      transform: translateY(-1px);
+    }
+
+    /* ── Progress ────────────────────────────────────────── */
+    .progress-area {
+      margin: 10px 28px 0;
+      display: none;
+      flex-shrink: 0;
+      position: relative;
+      z-index: 10;
+    }
+
+    .progress-area.show {
+      display: block;
+    }
+
+    .progress-track {
+      height: 3px;
+      background: var(--bg2);
+      border-radius: 100px;
+      overflow: hidden;
+    }
+
+    .progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--accent), #E8935A);
+      border-radius: 100px;
+      transition: width 0.3s ease;
+      width: 0%;
+    }
+
+    .progress-info {
+      display: flex;
+      justify-content: space-between;
+      margin-top: 5px;
+      font-family: var(--mono);
+      font-size: 9px;
+      color: var(--text3);
+    }
+
+    /* ═══════════════════════════════════════════════════════
+       CHAT
+    ═══════════════════════════════════════════════════════ */
+    .chat-area {
+      flex: 1;
+      overflow-y: auto;
+      padding: 24px 28px 8px;
+      display: flex;
+      flex-direction: column;
+      gap: 28px;
+      position: relative;
+      z-index: 1;
+    }
+
+    /* ── Welcome ─────────────────────────────────────────── */
+    .welcome {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      flex: 1;
+      text-align: center;
+      padding: 60px 20px;
+    }
+
+    .welcome-icon {
+      width: 72px;
+      height: 72px;
+      border-radius: 20px;
+      background: linear-gradient(135deg, var(--accent), #E8935A);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 32px;
+      margin-bottom: 24px;
+      box-shadow: 0 8px 32px rgba(201, 107, 63, 0.25);
+      animation: float 4s ease-in-out infinite;
+    }
+
+    @keyframes float {
+
+      0%,
+      100% {
+        transform: translateY(0);
+      }
+
+      50% {
+        transform: translateY(-6px);
+      }
+    }
+
+    .welcome h1 {
+      font-size: 26px;
+      font-weight: 700;
+      letter-spacing: -0.5px;
+      color: var(--text);
+      margin-bottom: 10px;
+    }
+
+    .welcome h1 span {
+      background: linear-gradient(90deg, var(--accent), #E8935A);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    /* ── Source cards (compact horizontal scrollable strip) ─ */
+    .sources-row {
+      display: flex;
+      gap: 7px;
+      overflow-x: auto;
+      padding-bottom: 3px;
+      scrollbar-width: thin;
+      scrollbar-color: var(--text4) transparent;
+    }
+
+    .sources-row::-webkit-scrollbar {
+      height: 3px;
+    }
+
+    .sources-row::-webkit-scrollbar-thumb {
+      background: var(--text4);
+      border-radius: 2px;
+    }
+
+    .src-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 8px 10px;
+      width: 155px;
+      min-width: 155px;
+      flex-shrink: 0;
+      cursor: pointer;
+      transition: all 0.18s;
+      position: relative;
+      overflow: hidden;
+      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05);
+    }
+
+    .src-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 2px;
+      background: linear-gradient(90deg, var(--accent), #E8935A);
+      opacity: 0;
+      transition: opacity 0.18s;
+    }
+
+    .src-card:hover,
+    .src-card.open {
+      border-color: rgba(201, 107, 63, 0.35);
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.09);
+    }
+
+    .src-card:hover::before,
+    .src-card.open::before {
+      opacity: 1;
+    }
+
+    .src-rel-bar {
+      height: 2px;
+      background: var(--bg2);
+      border-radius: 100px;
+      overflow: hidden;
+      margin-bottom: 6px;
+    }
+
+    .src-rel-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--accent), #E8935A);
+      border-radius: 100px;
+    }
+
+    .src-book {
+      font-family: var(--mono);
+      font-size: 9px;
+      font-weight: 600;
+      color: var(--accent);
+      letter-spacing: 0.04em;
+      margin-bottom: 1px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .src-page {
+      font-family: var(--mono);
+      font-size: 9px;
+      color: var(--text3);
+      margin-bottom: 4px;
+    }
+
+    .src-preview {
+      font-size: 10.5px;
+      color: var(--text2);
+      line-height: 1.45;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+
+    .src-rel-label {
+      position: absolute;
+      top: 6px;
+      right: 8px;
+      font-family: var(--mono);
+      font-size: 8px;
+      color: var(--text3);
+    }
+
+    /* Inline popover (shows below the source strip) */
+    .src-popover {
+      display: none;
+      background: var(--card);
+      border: 1px solid var(--border2);
+      border-radius: 10px;
+      padding: 12px 14px;
+      margin-top: 6px;
+      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.09);
+      animation: popIn 0.14s ease;
+    }
+
+    .src-popover.show {
+      display: block;
+    }
+
+    @keyframes popIn {
+      from {
+        opacity: 0;
+        transform: translateY(-4px);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .pop-head {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      margin-bottom: 8px;
+      gap: 8px;
+    }
+
+    .pop-title {
+      font-family: var(--mono);
+      font-size: 9px;
+      font-weight: 600;
+      color: var(--accent);
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      flex: 1;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .pop-close {
+      background: none;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      font-size: 10px;
+      color: var(--text3);
+      cursor: pointer;
+      padding: 1px 7px;
+      flex-shrink: 0;
+      transition: all 0.15s;
+    }
+
+    .pop-close:hover {
+      color: var(--rose);
+      border-color: var(--rose);
+    }
+
+    .pop-body {
+      font-size: 12px;
+      color: var(--text2);
+      line-height: 1.72;
+      white-space: pre-wrap;
+      max-height: 150px;
+      overflow-y: auto;
+    }
+
+    .ai-bubble {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 4px 16px 16px 16px;
+      padding: 14px 18px;
+      font-size: 14px;
+      color: var(--text);
+      line-height: 1.78;
+      word-break: break-word;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+    }
+
+    .ai-bubble strong {
+      color: var(--text);
+      font-weight: 600;
+    }
+
+    .ai-meta {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-family: var(--mono);
+      font-size: 9px;
+      color: var(--text3);
+      padding: 0 2px;
+    }
+
+    .ai-meta-chip {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      padding: 2px 7px;
+      border-radius: 5px;
+      letter-spacing: 0.04em;
+    }
+
+    /* ── Thinking ────────────────────────────────────────── */
+    .thinking-wrap {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .thinking-bubble {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 4px 16px 16px 16px;
+      padding: 12px 16px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+    }
+
+    .t-dots {
+      display: flex;
+      gap: 4px;
+      align-items: center;
+    }
+
+    .t-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--accent);
+      animation: tdot 1.4s ease-in-out infinite;
+    }
+
+    .t-dot:nth-child(2) {
+      animation-delay: 0.16s;
+    }
+
+    .t-dot:nth-child(3) {
+      animation-delay: 0.32s;
+    }
+
+    @keyframes tdot {
+
+      0%,
+      60%,
+      100% {
+        transform: translateY(0);
+        opacity: 0.4;
+      }
+
+      30% {
+        transform: translateY(-5px);
+        opacity: 1;
+      }
+    }
+
+    .t-text {
+      font-size: 12px;
+      color: var(--text3);
+      font-style: italic;
+    }
+
+    /* ═══════════════════════════════════════════════════════
+       INPUT BAR
+    ═══════════════════════════════════════════════════════ */
+    .input-bar {
+      padding: 14px 28px 20px;
+      border-top: 1px solid var(--border3);
+      background: rgba(251, 247, 244, 0.92);
+      backdrop-filter: blur(16px);
+      flex-shrink: 0;
+      position: relative;
+      z-index: 10;
+    }
+
+    .input-container {
+      background: var(--card);
+      border: 1px solid var(--border2);
+      border-radius: var(--r2);
+      overflow: hidden;
+      transition: border-color 0.2s, box-shadow 0.2s;
+      box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+    }
+
+    .input-container:focus-within {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 4px rgba(201, 107, 63, 0.1), 0 2px 12px rgba(0, 0, 0, 0.08);
+    }
+
+    .input-top {
+      display: flex;
+      align-items: flex-end;
+      gap: 0;
+    }
+
+    #q-input {
+      flex: 1;
+      background: none;
+      border: none;
+      color: var(--text);
+      font-family: var(--sans);
+      font-size: 14px;
+      padding: 14px 16px;
+      resize: none;
+      outline: none;
+      max-height: 130px;
+      min-height: 50px;
+      line-height: 1.5;
+    }
+
+    #q-input::placeholder {
+      color: var(--text3);
+    }
+
+    .send-btn {
+      margin: 8px;
+      width: 34px;
+      height: 34px;
+      border-radius: 10px;
+      background: linear-gradient(135deg, var(--accent), #E8935A);
+      border: none;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      transition: opacity 0.18s, transform 0.18s;
+      box-shadow: 0 4px 12px rgba(201, 107, 63, 0.3);
+    }
+
+    .send-btn:hover {
+      opacity: 0.85;
+      transform: scale(1.05);
+    }
+
+    .send-btn:disabled {
+      background: var(--bg2);
+      box-shadow: none;
+      cursor: not-allowed;
+      transform: none;
+      opacity: 1;
+    }
+
+    .send-btn svg {
+      width: 15px;
+      height: 15px;
+    }
+
+    .input-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 6px 14px 10px;
+      border-top: 1px solid var(--border3);
+    }
+
+    .input-hint {
+      font-size: 11px;
+      color: var(--text3);
+    }
+
+    .input-hint kbd {
+      font-family: var(--mono);
+      font-size: 9px;
+      color: var(--text3);
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      padding: 1px 5px;
+      border-radius: 4px;
+    }
+
+    /* book filter dropdown */
+    .filter-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .filter-row label {
+      font-size: 11px;
+      color: var(--text3);
+    }
+
+    #book-filter-sel {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text2);
+      font-size: 11px;
+      font-family: var(--sans);
+      padding: 3px 8px;
+      outline: none;
+      cursor: pointer;
+    }
+
+    #book-filter-sel:focus {
+      border-color: var(--accent);
+    }
+
+    #type-filter-sel {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text2);
+      font-size: 11px;
+      font-family: var(--sans);
+      padding: 3px 8px;
+      outline: none;
+      cursor: pointer;
+    }
+
+    #type-filter-sel:focus {
+      border-color: var(--accent);
+    }
+
+    /* ═══════════════════════════════════════════════════════
+       MODALS
+    ═══════════════════════════════════════════════════════ */
+    .overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.6);
+      backdrop-filter: blur(4px);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 500;
+    }
+
+    .overlay.show {
+      display: flex;
+    }
+
+    .modal-box {
+      background: var(--card);
+      border: 1px solid var(--border2);
+      border-radius: var(--r2);
+      padding: 28px;
+      width: 360px;
+      box-shadow: 0 24px 64px rgba(0, 0, 0, 0.18), 0 0 0 1px rgba(201, 107, 63, 0.08);
+      animation: modalIn 0.2s ease;
+    }
+
+    @keyframes modalIn {
+      from {
+        transform: translateY(10px) scale(0.97);
+        opacity: 0;
+      }
+
+      to {
+        transform: translateY(0) scale(1);
+        opacity: 1;
+      }
+    }
+
+    .modal-box h3 {
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--text);
+      margin-bottom: 6px;
+    }
+
+    .modal-box p {
+      font-size: 12px;
+      color: var(--text2);
+      margin-bottom: 18px;
+    }
+
+    .modal-input {
+      width: 100%;
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: var(--r);
+      color: var(--text);
+      font-family: var(--mono);
+      font-size: 12px;
+      padding: 10px 13px;
+      outline: none;
+      margin-bottom: 18px;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+
+    .modal-input:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(201, 107, 63, 0.12);
+    }
+
+    .modal-actions {
+      display: flex;
+      gap: 8px;
+      justify-content: flex-end;
+    }
+
+    .btn-ghost {
+      background: none;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text2);
+      font-size: 12px;
+      font-weight: 500;
+      padding: 8px 16px;
+      cursor: pointer;
+      font-family: var(--sans);
+      transition: all 0.18s;
+    }
+
+    .btn-ghost:hover {
+      border-color: var(--border2);
+      color: var(--text);
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, var(--accent), #E8935A);
+      border: none;
+      border-radius: 8px;
+      color: #fff;
+      font-size: 12px;
+      font-weight: 600;
+      padding: 8px 18px;
+      cursor: pointer;
+      font-family: var(--sans);
+      transition: opacity 0.18s;
+      box-shadow: 0 4px 12px rgba(201, 107, 63, 0.3);
+    }
+
+    .btn-primary:hover {
+      opacity: 0.88;
+    }
+
+    /* Source detail modal (kept for fallback, not used) */
+    .src-modal-inner {
+      display: none;
+    }
+
+    /* ═══════════════════════════════════════════════════════
+       TOAST
+    ═══════════════════════════════════════════════════════ */
+    .toast {
+      position: fixed;
+      bottom: 28px;
+      right: 28px;
+      z-index: 1000;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: var(--card2);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 12px 18px;
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--text);
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+      transform: translateY(20px);
+      opacity: 0;
+      transition: all 0.28s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+      pointer-events: none;
+      max-width: 340px;
+    }
+
+    .toast.show {
+      transform: translateY(0);
+      opacity: 1;
+    }
+
+    .toast-icon {
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 10px;
+      flex-shrink: 0;
+    }
+
+    .toast.ok .toast-icon {
+      background: rgba(52, 211, 153, 0.15);
+      color: var(--emerald);
+    }
+
+    .toast.err .toast-icon {
+      background: rgba(251, 113, 133, 0.15);
+      color: var(--rose);
+    }
+
+    .toast.ok {
+      border-color: rgba(52, 211, 153, 0.2);
+    }
+
+    .toast.err {
+      border-color: rgba(251, 113, 133, 0.2);
+    }
+  </style>
+</head>
+
+<body>
+  <div class="app">
+
+    <!-- ══════════════════════════════════
+       SIDEBAR
+  ══════════════════════════════════ -->
+    <aside class="sidebar">
+      <div class="sidebar-top">
+
+        <!-- Logo -->
+        <div class="logo-row">
+          <div class="logo-mark">
+            <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round"
+              stroke-linejoin="round">
+              <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
+              <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
+            </svg>
+          </div>
+          <span class="logo-name">Book<em>RAG</em></span>
+          <span class="logo-badge">AI</span>
+        </div>
+
+        <!-- API Key -->
+        <div class="field-label">Groq API Key</div>
+        <div class="api-key-field">
+          <span class="key-icon">🔑</span>
+          <input type="password" id="groq-key" placeholder="gsk_••••••••••••" autocomplete="off" />
+        </div>
+      </div>
+
+      <!-- Collections -->
+      <div class="sb-section">
+        <div class="sb-section-head">
+          <span class="field-label">Collections</span>
+          <button class="icon-btn" id="new-col-btn" title="New collection" onclick="openNewColModal()">+</button>
+        </div>
+        <div class="col-list" id="col-list">
+          <div class="empty">
+            <p>No collections yet.<br />Click + to create one.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Books -->
+      <div class="books-panel" id="books-panel">
+        <div class="sb-section-head" style="padding: 0 0 8px 0;">
+          <span class="field-label" id="books-section-label">Books</span>
+        </div>
+        <div id="books-list">
+          <div class="empty">
+            <p>Select a collection<br />to view its books</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Footer -->
+      <div class="sidebar-footer">
+        <div class="footer-dot"></div>
+        <span class="footer-text">MiniLM-L6-v2 · llama-3.1-8b</span>
+      </div>
+    </aside>
+
+    <!-- ══════════════════════════════════
+       MAIN
+  ══════════════════════════════════ -->
+    <main class="main">
+
+      <!-- Top bar -->
+      <div class="topbar">
+        <div class="topbar-status">
+          <div class="status-ring" id="status-ring"></div>
+          <div class="status-label" id="status-label">Select a collection to get started</div>
+        </div>
+        <div class="topbar-actions">
+          <button class="tb-btn" onclick="clearChat()">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+              <polyline points="1 4 1 10 7 10" />
+              <path d="M3.51 15a9 9 0 1 0 .49-3.5" />
+            </svg>
+            Clear chat
+          </button>
+        </div>
+      </div>
+
+      <!-- Upload zone -->
+      <div class="upload-zone" id="drop-zone" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)"
+        ondrop="handleDrop(event)" onclick="document.getElementById('file-input').click()">
+        <div class="upload-icon">📄</div>
+        <div class="upload-copy">
+          <div class="upload-title">Drop PDF books here</div>
+          <div class="upload-sub">Add to: <span id="upload-sub-id">select a collection first</span></div>
+        </div>
+        <button class="upload-btn"
+          onclick="event.stopPropagation(); document.getElementById('file-input').click()">Browse files</button>
+      </div>
+      <input type="file" id="file-input" accept=".pdf" multiple onchange="handleFileSelect(event)" />
+
+      <!-- YouTube Ingest Zone -->
+      <div class="yt-zone">
+        <input type="text" id="inline-yt-input" placeholder="Paste YouTube link here..."
+          onkeydown="if(event.key==='Enter') uploadInlineYt()" />
+        <button onclick="uploadInlineYt()">Extract Text</button>
+      </div>
+
+      <!-- Progress -->
+      <div class="progress-area" id="progress-area">
+        <div class="progress-track">
+          <div class="progress-fill" id="progress-fill"></div>
+        </div>
+        <div class="progress-info">
+          <span id="progress-label">Processing…</span>
+          <span id="progress-pct">0%</span>
+        </div>
+      </div>
+
+      <!-- Chat -->
+      <div class="chat-area" id="chat-area">
+        <div class="welcome" id="welcome-screen">
+          <div class="welcome-icon">📚</div>
+          <h1>Ask your <span>library</span> anything</h1>
+          <p>Upload PDF books, organize them into collections, and chat with them using AI — with page-level citations.
+          </p>
+          <div class="welcome-steps">
+            <div class="step-chip">
+              <div class="step-n">1</div>Add Groq key
+            </div>
+            <div class="step-chip">
+              <div class="step-n">2</div>Create collection
+            </div>
+            <div class="step-chip">
+              <div class="step-n">3</div>Upload PDFs
+            </div>
+            <div class="step-chip">
+              <div class="step-n">4</div>Ask away
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Input bar -->
+      <div class="input-bar">
+        <div class="input-container">
+          <div class="input-top">
+            <textarea id="q-input" rows="1" placeholder="Ask anything about your books…" onkeydown="handleKey(event)"
+              oninput="autoResize(this)">
+          </textarea>
+            <button class="send-btn" id="send-btn" onclick="sendQuestion()" title="Send (Enter)">
+              <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round"
+                stroke-linejoin="round">
+                <line x1="12" y1="19" x2="12" y2="5" />
+                <polyline points="5 12 12 5 19 12" />
+              </svg>
+            </button>
+          </div>
+          <div class="input-footer">
+            <span class="input-hint"><kbd>Enter</kbd> to send · <kbd>Shift+Enter</kbd> for newline</span>
+            <div class="filter-row">
+              <label for="book-filter-sel">Filter by book:</label>
+              <select id="book-filter-sel">
+                <option value="">All books</option>
+              </select>
+              <label for="type-filter-sel" style="margin-left: 16px;">Content type:</label>
+              <select id="type-filter-sel">
+                <option value="">All types</option>
+                <option value="pdf">📄 PDFs only</option>
+                <option value="youtube">📺 Videos only</option>
+              </select>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- ══════════════════════════════════
+     NEW COLLECTION MODAL
+══════════════════════════════════ -->
+  <div class="overlay" id="new-col-overlay">
+    <div class="modal-box">
+      <h3>New Collection</h3>
+      <p>Give it a memorable name. You can add books after.</p>
+      <input type="text" id="new-col-input" class="modal-input" placeholder="e.g. philosophy, self-help, fiction"
+        maxlength="50" onkeydown="if(event.key==='Enter') createCollection()" />
+      <div class="modal-actions">
+        <button class="btn-ghost" onclick="closeNewColModal()">Cancel</button>
+        <button class="btn-primary" onclick="createCollection()">Create</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════
+     SOURCE DETAIL MODAL
+══════════════════════════════════ -->
+  <div class="overlay" id="src-overlay" onclick="closeSrcModal()">
+    <div class="modal-box src-modal-inner" onclick="event.stopPropagation()">
+      <button class="src-modal-close" onclick="closeSrcModal()">✕ Close</button>
+      <h4 id="src-modal-title"></h4>
+      <p id="src-modal-body"></p>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════
+     TOAST
+══════════════════════════════════ -->
+  <div class="toast" id="toast">
+    <div class="toast-icon" id="toast-icon">✓</div>
+    <span id="toast-msg"></span>
+  </div>
+
+  <script>
+    const API = '';
+
+    /* ── State ────────────────────────────────────────────── */
+    const state = {
+      collections: [],
+      activeCollection: null,
+      books: [],
+      groqKey: '',
+    };
+
+    /* ── Init ─────────────────────────────────────────────── */
+    async function init() {
+      const saved = sessionStorage.getItem('groq_key');
+      if (saved) {
+        document.getElementById('groq-key').value = saved;
+        state.groqKey = saved;
+      }
+      document.getElementById('groq-key').addEventListener('input', e => {
+        state.groqKey = e.target.value.trim();
+        sessionStorage.setItem('groq_key', state.groqKey);
+      });
+      await loadCollections();
+    }
+
+    /* ── Collections ──────────────────────────────────────── */
+    async function loadCollections() {
+      try {
+        const res = await fetch(`${API}/api/collections`);
+        state.collections = await res.json();
+        renderCollections();
+      } catch {
+        toast('Cannot connect to backend. Is it running?', 'err');
+      }
+    }
+
+    function renderCollections() {
+      const el = document.getElementById('col-list');
+      if (!state.collections.length) {
+        el.innerHTML = '<div class="empty"><p>No collections yet.<br/>Click + to create one.</p></div>';
+        return;
+      }
+      el.innerHTML = state.collections.map(c => `
+      <div class="col-item ${c.name === state.activeCollection ? 'active' : ''}"
+           onclick="selectCollection('${c.name}')">
+        <div class="col-pip"></div>
+        <div class="col-name">${c.name}</div>
+        <div class="col-chip">${c.count}</div>
+        <button class="col-del-btn" onclick="event.stopPropagation(); deleteCollection('${c.name}')" title="Delete">✕</button>
+      </div>`).join('');
+    }
+
+    async function selectCollection(name) {
+      state.activeCollection = name;
+      renderCollections();
+      updateTopbar();
+      await loadBooks();
+      updateBookFilter();
+    }
+
+    async function deleteCollection(name) {
+      if (!confirm(`Delete collection "${name}" and ALL its data?`)) return;
+      const res = await fetch(`${API}/api/collections/${name}`, { method: 'DELETE' });
+      if (res.ok) {
+        if (state.activeCollection === name) {
+          state.activeCollection = null;
+          state.books = [];
+          renderBooks();
+          updateTopbar();
+          updateBookFilter();
+        }
+        toast(`Deleted "${name}"`, 'ok');
+        await loadCollections();
+      } else {
+        toast('Delete failed', 'err');
+      }
+    }
+
+    function openNewColModal() {
+      document.getElementById('new-col-overlay').classList.add('show');
+      setTimeout(() => document.getElementById('new-col-input').focus(), 80);
+    }
+
+    function closeNewColModal() {
+      document.getElementById('new-col-overlay').classList.remove('show');
+      document.getElementById('new-col-input').value = '';
+    }
+
+    async function createCollection() {
+      const name = document.getElementById('new-col-input').value.trim();
+      if (!name) { toast('Enter a collection name', 'err'); return; }
+      const res = await fetch(`${API}/api/collections`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name }),
+      });
+      const data = await res.json();
+      if (!res.ok) { toast(data.detail || 'Error creating collection', 'err'); return; }
+      closeNewColModal();
+      toast(`Collection "${name}" created`, 'ok');
+      await loadCollections();
+      selectCollection(name);
+    }
+
+    /* ── Books ────────────────────────────────────────────── */
+    async function loadBooks() {
+      if (!state.activeCollection) return;
+      try {
+        const res = await fetch(`${API}/api/collections/${state.activeCollection}/books`);
+        state.books = await res.json();
+        renderBooks();
+      } catch {
+        state.books = [];
+        renderBooks();
+      }
+    }
+
+    function renderBooks() {
+      const el = document.getElementById('books-list');
+      const label = document.getElementById('books-section-label');
+
+      label.textContent = state.activeCollection
+        ? `Books in "${state.activeCollection}"`
+        : 'Books';
+
+      if (!state.books.length) {
+        el.innerHTML = `<div class="empty"><p>${state.activeCollection
+          ? 'Drop PDFs above to add books.'
+          : 'Select a collection to view its books.'}</p></div>`;
+        return;
+      }
+
+      el.innerHTML = state.books.map(b => `
+      <div class="book-row">
+        <div class="book-icon-wrap">📖</div>
+        <div class="book-info">
+          <span class="book-title" title="${b.name}">${b.name.replace(/_/g, ' ')}</span>
+          <div class="book-meta">${b.pages} pg · ${b.chunks} chunks</div>
+        </div>
+        <button class="book-del-btn" onclick="deleteBook('${b.name}')" title="Remove">✕</button>
+      </div>`).join('');
+    }
+
+    async function deleteBook(bookName) {
+      if (!confirm(`Remove "${bookName.replace(/_/g, ' ')}" from this collection?`)) return;
+      const res = await fetch(`${API}/api/collections/${state.activeCollection}/books/${bookName}`, {
+        method: 'DELETE'
+      });
+      if (res.ok) {
+        toast('Book removed', 'ok');
+        await loadBooks();
+        await loadCollections();
+        updateBookFilter();
+      } else {
+        toast('Failed to remove book', 'err');
+      }
+    }
+
+    /* ── Topbar & UI state ────────────────────────────────── */
+    function updateTopbar() {
+      const ring = document.getElementById('status-ring');
+      const label = document.getElementById('status-label');
+      const sub = document.getElementById('upload-sub-id');
+
+      if (state.activeCollection) {
+        ring.classList.add('live');
+        label.innerHTML = `Active: <strong>${state.activeCollection}</strong>`;
+        sub.textContent = state.activeCollection;
+      } else {
+        ring.classList.remove('live');
+        label.textContent = 'Select a collection to get started';
+        sub.textContent = 'select a collection first';
+      }
+    }
+
+    function updateBookFilter() {
+      const sel = document.getElementById('book-filter-sel');
+      sel.innerHTML = '<option value="">All books</option>';
+      state.books.forEach(b => {
+        const opt = document.createElement('option');
+        opt.value = b.name;
+        opt.textContent = b.name.replace(/_/g, ' ');
+        sel.appendChild(opt);
+      });
+    }
+
+    /* ── Upload ───────────────────────────────────────────── */
+    function handleDragOver(e) {
+      e.preventDefault();
+      document.getElementById('drop-zone').classList.add('over');
+    }
+
+    function handleDragLeave() {
+      document.getElementById('drop-zone').classList.remove('over');
+    }
+
+    function handleDrop(e) {
+      e.preventDefault();
+      document.getElementById('drop-zone').classList.remove('over');
+      const files = Array.from(e.dataTransfer.files).filter(f => f.name.toLowerCase().endsWith('.pdf'));
+      if (files.length) processFiles(files);
+    }
+
+    function handleFileSelect(e) {
+      const files = Array.from(e.target.files);
+      if (files.length) processFiles(files);
+      e.target.value = '';
+    }
+
+    async function processFiles(files) {
+      if (!state.activeCollection) {
+        toast('Select or create a collection first', 'err'); return;
+      }
+
+      const area = document.getElementById('progress-area');
+      const fill = document.getElementById('progress-fill');
+      const lbl = document.getElementById('progress-label');
+      const pct = document.getElementById('progress-pct');
+      area.classList.add('show');
+
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        const p = Math.round((i / files.length) * 100);
+        fill.style.width = p + '%';
+        pct.textContent = p + '%';
+        lbl.textContent = `Ingesting ${i + 1}/${files.length}: ${file.name}`;
+
+        const fd = new FormData();
+        fd.append('file', file);
+        fd.append('collection', state.activeCollection);
+
+        try {
+          const res = await fetch(`${API}/api/upload`, { method: 'POST', body: fd });
+          const data = await res.json();
+          if (!res.ok) {
+            toast(`${file.name}: ${data.detail || 'Upload failed'}`, 'err');
+          } else {
+            toast(`✓ "${data.book}" — ${data.total_pages} pages, ${data.total_chunks} chunks`, 'ok');
+          }
+        } catch (err) {
+          toast(`${file.name}: ${err.message}`, 'err');
+        }
+      }
+
+      fill.style.width = '100%';
+      pct.textContent = '100%';
+      lbl.textContent = 'Done!';
+      setTimeout(() => {
+        area.classList.remove('show');
+        fill.style.width = '0%';
+      }, 1800);
+
+      await loadBooks();
+      await loadCollections();
+      updateBookFilter();
+    }
+
+    /* ── YouTube ───────────────────────────────────────────── */
+    async function uploadInlineYt() {
+      if (!state.activeCollection) {
+        toast('Select or create a collection first', 'err'); return;
+      }
+
+      const inputEl = document.getElementById('inline-yt-input');
+      const text = inputEl.value.trim();
+      if (!text) { toast('Enter at least one YouTube URL', 'err'); return; }
+
+      const urls = text.split(/[\n, ]+/).map(u => u.trim()).filter(u => u.startsWith('http'));
+      if (!urls.length) { toast('Invalid URL', 'err'); return; }
+
+      inputEl.value = '';
+
+      const area = document.getElementById('progress-area');
+      const fill = document.getElementById('progress-fill');
+      const lbl = document.getElementById('progress-label');
+      const pct = document.getElementById('progress-pct');
+      area.classList.add('show');
+      fill.style.width = '30%';
+      pct.textContent = '30%';
+      lbl.textContent = `Extracting ${urls.length} YouTube video(s)...`;
+
+      try {
+        const res = await fetch(`${API}/api/upload_yt`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ urls: urls, collection: state.activeCollection })
+        });
+        const data = await res.json();
+
+        fill.style.width = '100%';
+        pct.textContent = '100%';
+        lbl.textContent = 'Done!';
+
+        if (!res.ok) {
+          toast(data.detail || 'YouTube ingest failed', 'err');
+        } else {
+          toast(`✓ Ingested ${data.videos_ingested} videos, ${data.total_chunks} chunks`, 'ok');
+        }
+      } catch (err) {
+        fill.style.width = '0%';
+        toast(`Error: ${err.message}`, 'err');
+      }
+
+      setTimeout(() => {
+        area.classList.remove('show');
+        fill.style.width = '0%';
+      }, 1800);
+
+      await loadBooks();
+      await loadCollections();
+      updateBookFilter();
+    }
+
+    /* ── Chat ─────────────────────────────────────────────── */
+    function handleKey(e) {
+      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendQuestion(); }
+    }
+
+    function autoResize(el) {
+      el.style.height = 'auto';
+      el.style.height = Math.min(el.scrollHeight, 130) + 'px';
+    }
+
+    function clearChat() {
+      const area = document.getElementById('chat-area');
+      area.innerHTML = `
+      <div class="welcome" id="welcome-screen">
+        <div class="welcome-icon">📚</div>
+        <h1>Ask your <span>library</span> anything</h1>
+        <p>Upload PDF books, organize them into collections, and chat with them using AI — with page-level citations.</p>
+        <div class="welcome-steps">
+          <div class="step-chip"><div class="step-n">1</div>Add Groq key</div>
+          <div class="step-chip"><div class="step-n">2</div>Create collection</div>
+          <div class="step-chip"><div class="step-n">3</div>Upload PDFs</div>
+          <div class="step-chip"><div class="step-n">4</div>Ask away</div>
+        </div>
+      </div>`;
+    }
+
+    async function sendQuestion() {
+      const input = document.getElementById('q-input');
+      const question = input.value.trim();
+      if (!question) return;
+      if (!state.groqKey) { toast('Enter your Groq API key first', 'err'); return; }
+      if (!state.activeCollection) { toast('Select a collection first', 'err'); return; }
+
+      const bookFilter = document.getElementById('book-filter-sel').value || null;
+      const contentTypeFilter = document.getElementById('type-filter-sel').value || null;
+
+      input.value = '';
+      autoResize(input);
+
+      const chat = document.getElementById('chat-area');
+      const welcome = chat.querySelector('#welcome-screen');
+      if (welcome) welcome.remove();
+
+      /* user bubble */
+      appendUserBubble(chat, question);
+
+      /* thinking */
+      const thinkEl = appendThinking(chat);
+      chat.scrollTop = chat.scrollHeight;
+
+      document.getElementById('send-btn').disabled = true;
+
+      try {
+        const res = await fetch(`${API}/api/ask`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            question,
+            collection: state.activeCollection,
+            groq_key: state.groqKey,
+            n_results: 8,
+            book_filter: bookFilter,
+            content_type_filter: contentTypeFilter,
+          }),
+        });
+
+        const data = await res.json();
+        thinkEl.remove();
+
+        if (!res.ok) {
+          appendAiBubble(chat, `⚠ ${data.detail || 'Error'}`, [], null);
+        } else {
+          const div = appendAiBubble(chat, data.answer, data.sources, data);
+          setTimeout(() => div.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50);
+        }
+
+      } catch (err) {
+        thinkEl.remove();
+        appendAiBubble(chat, `Network error: ${err.message}`, [], null);
+      }
+
+      document.getElementById('send-btn').disabled = false;
+      // Scroll so the AI answer top is visible, not the bottom of sources
+      div.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    function appendUserBubble(chat, text) {
+      const div = document.createElement('div');
+      div.className = 'msg-group';
+      div.innerHTML = `<div class="user-bubble">${escHtml(text)}</div>`;
+      chat.appendChild(div);
+    }
+
+    function appendThinking(chat) {
+      const div = document.createElement('div');
+      div.className = 'msg-group';
+      div.innerHTML = `
+      <div class="ai-wrap">
+        <div class="ai-avatar">✦</div>
+        <div class="ai-content">
+          <div class="thinking-bubble">
+            <div class="t-dots">
+              <div class="t-dot"></div>
+              <div class="t-dot"></div>
+              <div class="t-dot"></div>
+            </div>
+            <span class="t-text">Searching your library…</span>
+          </div>
+        </div>
+      </div>`;
+      chat.appendChild(div);
+      return div;
+    }
+
+    function appendAiBubble(chat, answer, sources, data) {
+      // Build compact source strip with inline popover
+      const uid = 'src_' + Date.now();
+      const sourcesHtml = sources.length ? `
+      <div class="sources-row" id="strip_${uid}">
+        ${sources.map((s, i) => `
+          <div class="src-card" id="card_${uid}_${i}" onclick="togglePopover('${uid}',${i})">
+            <div class="src-rel-bar"><div class="src-rel-fill" style="width:${s.relevance}%"></div></div>
+            <div class="src-rel-label">${s.relevance}%</div>
+            <div class="src-book">${escHtml((s.book_title || s.book).replace(/_/g, ' '))}</div>
+            <div class="src-page">pg ${s.page}</div>
+            <div class="src-preview">${escHtml(s.preview)}</div>
+          </div>`).join('')}
+      </div>
+      <div class="src-popover" id="pop_${uid}"></div>` : '';
+
+      const metaHtml = data ? `
+      <div class="ai-meta">
+        <div class="ai-meta-chip">⚡ ${data.model}</div>
+        <div class="ai-meta-chip">📄 ${data.chunks_used} chunks</div>
+        <div class="ai-meta-chip">🔤 ${data.tokens_used} tok</div>
+      </div>` : '';
+
+      const div = document.createElement('div');
+      div.className = 'msg-group';
+      div.innerHTML = `
+      <div class="ai-wrap">
+        <div class="ai-avatar">✦</div>
+        <div class="ai-content">
+          <div class="ai-bubble">${formatAnswer(answer)}</div>
+          ${sourcesHtml}
+          ${metaHtml}
+        </div>
+      </div>`;
+      chat.appendChild(div);
+      // Store sources on the element for popover access
+      div._sources = sources;
+      div._uid = uid;
+      return div;
+    }
+
+    // Track open popover state
+    let _openPop = null;
+
+    function togglePopover(uid, idx) {
+      const pop = document.getElementById('pop_' + uid);
+      const cards = document.querySelectorAll(`[id^="card_${uid}_"]`);
+      const strip = document.getElementById('strip_' + uid);
+
+      // Find the sources array from the parent msg-group
+      const group = strip.closest('.msg-group');
+      const src = group._sources[idx];
+
+      const sameCard = _openPop && _openPop.uid === uid && _openPop.idx === idx;
+
+      // Close any open popover
+      if (_openPop) {
+        const oldPop = document.getElementById('pop_' + _openPop.uid);
+        if (oldPop) oldPop.classList.remove('show');
+        document.querySelectorAll(`[id^="card_${_openPop.uid}_"]`).forEach(c => c.classList.remove('open'));
+        _openPop = null;
+      }
+
+      if (sameCard) return;  // clicked same card = just close
+
+      // Show new popover
+      const title = (src.book_title || src.book).replace(/_/g, ' ');
+      pop.innerHTML = `
+      <div class="pop-head">
+        <span class="pop-title">${escHtml(title)} &mdash; page ${src.page} &nbsp;·&nbsp; ${src.relevance}% match</span>
+        <button class="pop-close" onclick="togglePopover('${uid}',${idx})">✕</button>
+      </div>
+      <div class="pop-body">${escHtml(src.preview)}</div>`;
+      pop.classList.add('show');
+      cards[idx].classList.add('open');
+      _openPop = { uid, idx };
+    }
+
+    /* ── Source modal ─────────────────────────────────────── */
+    function showSrcDetail(jsonStr) {
+      const s = JSON.parse(jsonStr);
+      document.getElementById('src-modal-title').textContent =
+        `${s.book.replace(/_/g, ' ')}  —  Page ${s.page}  (${s.relevance}% relevance)`;
+      document.getElementById('src-modal-body').textContent = s.preview;
+      document.getElementById('src-overlay').classList.add('show');
+    }
+
+    function closeSrcModal() {
+      document.getElementById('src-overlay').classList.remove('show');
+    }
+
+    /* ── Helpers ──────────────────────────────────────────── */
+    function escHtml(s) {
+      return String(s)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    }
+
+    function escAttr(s) { return s.replace(/'/g, "\\'"); }
+
+    function formatAnswer(text) {
+      return escHtml(text)
+        // **bold**
+        .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+        // *italic*
+        .replace(/\*([^*]+?)\*/g, '<em>$1</em>')
+        // `code`
+        .replace(/`([^`]+?)`/g, '<code style="font-family:var(--mono);font-size:12px;background:var(--bg2);padding:1px 5px;border-radius:4px;">$1</code>')
+        // Blank line = paragraph break
+        .replace(/\n\n/g, '</p><p style="margin-top:10px">')
+        // Single newline = line break
+        .replace(/\n/g, '<br>')
+        // Wrap in paragraph
+        .replace(/^(.+)$/, '<p>$1</p>');
+    }
+
+    function toast(msg, type = '') {
+      const el = document.getElementById('toast');
+      const icon = document.getElementById('toast-icon');
+      const txt = document.getElementById('toast-msg');
+      txt.textContent = msg;
+      icon.textContent = type === 'err' ? '✕' : '✓';
+      el.className = `toast show ${type}`;
+      clearTimeout(el._t);
+      el._t = setTimeout(() => el.classList.remove('show'), 3800);
+    }
+
+    /* ── Keyboard shortcuts ───────────────────────────────── */
+    document.addEventListener('keydown', e => {
+      if (e.key === 'Escape') {
+        closeNewColModal();
+        closeSrcModal();
+      }
+    });
+
+    /* ── Boot ─────────────────────────────────────────────── */
+    init();
+  </script>
+</body>
+
+</html>
